@@ -1,6 +1,12 @@
 import { db } from '$lib/firebase/firebase.server';
 import { firestore } from 'firebase-admin';
 import { saveFileToBucket } from './firestorage.server';
+import { PAGE_SIZE } from '$env/static/private';
+
+export async function getUser(userId) {
+	const user = await db.collection('users').doc(userId).get();
+	return user?.data();
+}
 
 export async function addBook(book, userId) {
 	// save to the firestore db w/out picture information
@@ -36,12 +42,44 @@ export async function addBook(book, userId) {
 	return bookRef.id;
 }
 
-export async function getBook(id) {
+export async function getBook(id, userId = null) {
 	const bookRef = await db.collection('books').doc(id).get();
 
 	if (bookRef.exists) {
-		return { id: bookRef.id, ...bookRef.data() };
+		const user = userId ? await getUser(userId) : null;
+		const likedBook = user?.bookIds?.includes(id) || false;
+
+		return { id: bookRef.id, ...bookRef.data(), likedBook };
 	}
+}
+
+export async function getBooks(userId = null, page = 1) {
+	const user = userId ? await getUser(userId) : null;
+
+	const bookCount = await db.collection('books').count().get();
+
+	const totalBooks = bookCount.data().count;
+
+	const next = totalBooks > page * +PAGE_SIZE;
+	const previous = page > 1;
+	const books = await db
+		.collection('books')
+		.limit(+PAGE_SIZE)
+		.offset((page - 1) * +PAGE_SIZE)
+		.orderBy('created_at', 'desc')
+		.get();
+
+	const likedBooks = books.docs.map((d) => {
+		const likedBook = user?.bookIds?.includes(d.id) || false;
+
+		return { ...d.data(), id: d.id };
+	});
+
+	return {
+		books: likedBooks,
+		next,
+		previous
+	};
 }
 
 export async function editBook(id, formData, userId) {
@@ -71,4 +109,67 @@ export async function editBook(id, formData, userId) {
 
 		bookRef.update({ small_picture: smallPictureUrl });
 	}
+}
+
+export async function toggleBookLike(bookId, userId) {
+	const bookDoc = db.collection('books').doc(bookId);
+	const userDoc = db.collection('users').doc(userId);
+
+	const user = await userDoc.get();
+	const userData = user.data();
+
+	// Book has already been liked so remove it from list and decrement on like
+	if (userData.bookIds && userData.bookIds.includes(bookId)) {
+		await userDoc.update({
+			bookIds: firestore.FieldValue.arrayRemove(bookId)
+		});
+		await bookDoc.update({
+			likes: firestore.FieldValue.increment(-1)
+		});
+	} else {
+		// Book has NOT already been liked so add it to list and increment on like
+		await userDoc.update({
+			bookIds: firestore.FieldValue.arrayUnion(bookId)
+		});
+		await bookDoc.update({
+			likes: firestore.FieldValue.increment(1)
+		});
+	}
+
+	return await getBook(bookId, userId);
+}
+
+export async function getBooksForUser(userId) {
+	const user = await getUser(userId);
+
+	const books = await db
+		.collection('books')
+		.orderBy('created_at')
+		.where('user_id', '==', userId)
+		.get();
+
+	return books.docs.map((d) => {
+		const likedBook = user?.bookIds?.includes(d.id) || false;
+
+		return { id: d.id, ...d.data(), likedBook };
+	});
+}
+
+export async function getLikedBooks(userId) {
+	const user = await getUser(userId);
+
+	const bookIds = user?.bookIds || [];
+
+	if (bookIds.length === 0) {
+		return [];
+	}
+
+	const books = await db
+		.collection('books')
+		.where(firestore.FieldPath.documentId(), 'in', bookIds)
+		.get();
+
+	return books.docs.map((d) => {
+		return { id: d.id, ...d.data(), likedBook: true };
+	});
 }

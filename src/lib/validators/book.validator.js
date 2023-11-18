@@ -65,7 +65,7 @@ export default async function validate(formData, edit = false) {
 			return agg;
 		}, {});
 
-		console.log(data.main_picture);
+		// console.log(data.main_picture);
 		delete data.main_picture;
 		delete data.small_picture;
 

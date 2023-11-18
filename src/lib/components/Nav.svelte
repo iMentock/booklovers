@@ -1,9 +1,13 @@
 <script>
 	import { page } from '$app/stores';
-	import authStore from '$lib/stores/auth.store';
 	import { logout } from '$lib/firebase/auth.client';
 	import messsagesStore from '$lib/stores/messsages.store';
 	import { goto } from '$app/navigation';
+
+	/**
+	 * @type {Boolean}}
+	 */
+	export let isLoggedIn;
 
 	let isOpen = false;
 
@@ -39,7 +43,7 @@
 		</button>
 		<div class:show={isOpen} class="collapse navbar-collapse" id="navbarNav">
 			<ul class="navbar-nav">
-				{#if $authStore.isLoggedIn}
+				{#if isLoggedIn}
 					<li class="nav-item">
 						<a
 							class:active={$page.url.pathname === '/'}
