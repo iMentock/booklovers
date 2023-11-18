@@ -2,6 +2,7 @@ import { db } from '$lib/firebase/firebase.server';
 import { firestore } from 'firebase-admin';
 import { saveFileToBucket } from './firestorage.server';
 import { PAGE_SIZE } from '$env/static/private';
+import admin from 'firebase-admin';
 
 export async function getUser(userId) {
 	const user = await db.collection('users').doc(userId).get();
@@ -18,7 +19,7 @@ export async function addBook(book, userId) {
 		description: book.description,
 		author: book.author,
 		user_id: userId,
-		created_at: firestore.Timestamp.now().seconds,
+		created_at: admin.firestore.Timestamp.now().seconds,
 		likes: 0
 	});
 
@@ -121,18 +122,18 @@ export async function toggleBookLike(bookId, userId) {
 	// Book has already been liked so remove it from list and decrement on like
 	if (userData.bookIds && userData.bookIds.includes(bookId)) {
 		await userDoc.update({
-			bookIds: firestore.FieldValue.arrayRemove(bookId)
+			bookIds: admin.firestore.FieldValue.arrayRemove(bookId)
 		});
 		await bookDoc.update({
-			likes: firestore.FieldValue.increment(-1)
+			likes: admin.firestore.FieldValue.increment(-1)
 		});
 	} else {
 		// Book has NOT already been liked so add it to list and increment on like
 		await userDoc.update({
-			bookIds: firestore.FieldValue.arrayUnion(bookId)
+			bookIds: admin.firestore.FieldValue.arrayUnion(bookId)
 		});
 		await bookDoc.update({
-			likes: firestore.FieldValue.increment(1)
+			likes: admin.firestore.FieldValue.increment(1)
 		});
 	}
 
@@ -166,7 +167,7 @@ export async function getLikedBooks(userId) {
 
 	const books = await db
 		.collection('books')
-		.where(firestore.FieldPath.documentId(), 'in', bookIds)
+		.where(admin.firestore.FieldPath.documentId(), 'in', bookIds)
 		.get();
 
 	return books.docs.map((d) => {
